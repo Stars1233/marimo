@@ -11,8 +11,7 @@ dynamic = ["version"]
 # Dependencies should have lower bounds, which should be as loose as possible.
 dependencies = [
     # For maintainable cli
-    # - 8.2.0 introduced a bug where boolean flags broke
-    "click>=8.0,!=8.2.0,<9",
+    "click>=8.0,<9",
     # code completion
     "jedi>=0.18.0",
     # compile markdown to html
@@ -103,7 +102,7 @@ recommended = [
 ]
 
 dev = [
-    "click <8.1.4",   # https://github.com/pallets/click/issues/2558
+    "click>=8.0,<9",
     "black~=23.12.1",
     # For tracing debugging
     "opentelemetry-api~=1.26.0",
@@ -199,6 +198,8 @@ dependencies = [
     "python-lsp-server>=1.12.1",
     "pandas-stubs>=1.5.3.230321",
     "pyiceberg>=0.9.0",
+    "litellm>=1.70.0",
+    "python-dotenv>=1.0.1",
     "types-Pillow~=10.2.0.20240520",
     "types-Pygments~=2.18.0.20240506",
     "types-psutil~=5.9.5.20240516",
@@ -259,7 +260,7 @@ extra-dependencies = [
     "pyarrow>=19.0.1",
     "pyarrow_hotfix",
     "altair>=5.4.0",
-    "polars~=1.24.0",
+    "polars>=1.30.0",
     "sqlglot>=23.4",
     "sqlalchemy>=2.0.40",
     "pyiceberg>=0.9.0",
@@ -280,6 +281,8 @@ extra-dependencies = [
     "openai>=1.55.3",
     "anthropic==0.34.1",
     "google-generativeai==0.8.5",
+    "boto3>=1.38.19",
+    "litellm>=1.70.0",
     # exporting as ipynb
     "nbformat >=5.10.4",
     "sympy>=1.13.3",
@@ -293,7 +296,7 @@ extra-dependencies = [
 python = ["3.9", "3.10", "3.11", "3.12", "3.13"]
 
 [tool.hatch.envs.docs]
-features = ["dev", "docs"]
+features = ["docs"]
 dependencies = [
     "marimo_docs @ file://docs",
 ]
@@ -441,18 +444,21 @@ ban-relative-imports = "all"
 # Ban certain modules from being imported at module level, instead requiring
 # that they're imported lazily (e.g., within a function definition).
 banned-module-level-imports = [
-    "numpy",
-    "pandas",
-    "tomlkit",
-    "polars",
-    "sqlglot",
-    "duckdb",
-    "sqlalchemy",
     "altair",
-    "ipython",
     "anywidget",
+    "chdb",
+    "clickhouse_connect",
+    "duckdb",
+    "ipython",
+    "numpy",
     "packaging",
+    "pandas",
+    "polars",
+    "pyarrow",
     "redis",
+    "sqlalchemy",
+    "sqlglot",
+    "tomlkit",
     "typing_extensions",
 ]
 

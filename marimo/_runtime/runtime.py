@@ -90,6 +90,7 @@ from marimo._messaging.types import (
 from marimo._output.rich_help import mddoc
 from marimo._plugins.core.web_component import JSONType
 from marimo._plugins.ui._core.ui_element import MarimoConvertValueException
+from marimo._plugins.ui._impl.anywidget.init import WIDGET_COMM_MANAGER
 from marimo._runtime import dataflow, handlers, marimo_pdb, patches
 from marimo._runtime.app_meta import AppMeta
 from marimo._runtime.context import (
@@ -133,6 +134,7 @@ from marimo._runtime.requests import (
     RefreshSecretsRequest,
     RenameRequest,
     SetCellConfigRequest,
+    SetModelMessageRequest,
     SetUIElementValueRequest,
     SetUserConfigRequest,
     StopRequest,
@@ -164,7 +166,7 @@ from marimo._secrets.load_dotenv import (
 from marimo._secrets.secrets import get_secret_keys
 from marimo._server.model import SessionMode
 from marimo._server.types import QueueType
-from marimo._sql.engines.types import SQLEngine
+from marimo._sql.engines.types import EngineCatalog
 from marimo._sql.get_engines import (
     engine_to_data_source_connection,
     get_engines_from_variables,
@@ -2053,6 +2055,15 @@ class Kernel:
         async def handle_rename(request: RenameRequest) -> None:
             await self.rename_file(request.filename)
 
+        async def handle_receive_model_message(
+            request: SetModelMessageRequest,
+        ) -> None:
+            buffers = request.buffers or []
+            buffers_as_bytes = [buffer.encode("utf-8") for buffer in buffers]
+            WIDGET_COMM_MANAGER.receive_comm_message(
+                request.model_id, request.message, buffers_as_bytes
+            )
+
         async def handle_function_call(request: FunctionCallRequest) -> None:
             status, ret, _ = await self.function_call_request(request)
             LOGGER.debug("Function returned with status %s", status)
@@ -2090,6 +2101,7 @@ class Kernel:
         handler.register(RenameRequest, handle_rename)
         handler.register(SetCellConfigRequest, self.set_cell_config)
         handler.register(SetUIElementValueRequest, handle_set_ui_element_value)
+        handler.register(SetModelMessageRequest, handle_receive_model_message)
         handler.register(SetUserConfigRequest, handle_set_user_config)
         handler.register(StopRequest, handle_stop)
         # Datasets
@@ -2208,10 +2220,12 @@ class DatasetCallbacks:
             ).broadcast()
         return
 
-    def _get_sql_engine(
+    def _get_engine_catalog(
         self, variable_name: str
-    ) -> tuple[Optional[SQLEngine], Optional[str]]:
-        """Find the SQL engine associated with the given variable name. Returns the engine and the error message if any."""
+    ) -> tuple[Optional[EngineCatalog[Any]], Optional[str]]:
+        """Fetch the catalog-capable engine associated with the given variable name.
+
+        Returns the engine if it supports catalog operations, or an error message if not."""
         variable_name = cast(VariableName, variable_name)
 
         try:
@@ -2220,7 +2234,11 @@ class DatasetCallbacks:
             engines = get_engines_from_variables([(variable_name, engine_val)])
             if engines is None or len(engines) == 0:
                 return None, "Engine not found"
-            return engines[0][1], None
+            engine = engines[0][1]
+            if isinstance(engine, EngineCatalog):
+                return engine, None
+            else:
+                return None, "Connection does not support catalog operations"
         except Exception as e:
             LOGGER.warning(
                 "Failed to get engine %s", variable_name, exc_info=e
@@ -2243,7 +2261,7 @@ class DatasetCallbacks:
         schema_name = request.schema
         table_name = request.table_name
 
-        engine, error = self._get_sql_engine(variable_name)
+        engine, error = self._get_engine_catalog(variable_name)
         if error is not None or engine is None:
             SQLTablePreview(
                 request_id=request.request_id, table=None, error=error
@@ -2288,7 +2306,7 @@ class DatasetCallbacks:
         database_name = request.database
         schema_name = request.schema
 
-        engine, error = self._get_sql_engine(variable_name)
+        engine, error = self._get_engine_catalog(variable_name)
         if error is not None or engine is None:
             SQLTableListPreview(
                 request_id=request.request_id, tables=[], error=error
@@ -2320,7 +2338,7 @@ class DatasetCallbacks:
     ) -> None:
         """Broadcasts a datasource connection for a given engine"""
         variable_name = cast(VariableName, request.engine)
-        engine, error = self._get_sql_engine(variable_name)
+        engine, error = self._get_engine_catalog(variable_name)
         if error is not None or engine is None:
             LOGGER.error("Failed to get engine %s", variable_name)
             return

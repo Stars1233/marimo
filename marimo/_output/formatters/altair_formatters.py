@@ -2,19 +2,19 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from marimo._config.config import Theme
 from marimo._messaging.mimetypes import KnownMimeType, MimeBundleOrTuple
 from marimo._output.formatters.formatter_factory import FormatterFactory
 from marimo._plugins.core.media import io_to_data_url
-from marimo._plugins.ui._impl.altair_chart import maybe_make_full_width
+from marimo._plugins.ui._impl.altair_chart import (
+    AltairChartType,
+    maybe_make_full_width,
+)
 from marimo._plugins.ui._impl.charts.altair_transformer import (
     sanitize_nan_infs,
 )
-
-if TYPE_CHECKING:
-    import altair
 
 
 class AltairFormatter(FormatterFactory):
@@ -34,7 +34,7 @@ class AltairFormatter(FormatterFactory):
         register_transformers()
 
         @formatting.formatter(altair.TopLevelMixin)
-        def _show_chart(chart: altair.Chart) -> tuple[KnownMimeType, str]:
+        def _show_chart(chart: AltairChartType) -> tuple[KnownMimeType, str]:
             import altair as alt
 
             # Try to get the _repr_mimebundle_ method from the chart
@@ -104,7 +104,7 @@ class AltairFormatter(FormatterFactory):
 # This is only needed since it seems that altair does not
 # handle this internally.
 # https://github.com/marimo-team/marimo/issues/2302
-def _apply_embed_options(chart: altair.Chart) -> altair.Chart:
+def _apply_embed_options(chart: AltairChartType) -> AltairChartType:
     import altair as alt
 
     # Respect user-set embed options
@@ -124,7 +124,7 @@ def _apply_embed_options(chart: altair.Chart) -> altair.Chart:
 
 
 def chart_to_json(
-    chart: altair.Chart,
+    chart: AltairChartType,
     spec_format: Literal["vega", "vega-lite"] = "vega-lite",
     validate: bool = True,
 ) -> str:
@@ -136,8 +136,16 @@ def chart_to_json(
     """
     try:
         return chart.to_json(
-            format=spec_format, validate=validate, allow_nan=False
+            format=spec_format,
+            validate=validate,
+            allow_nan=False,
+            default=str,
         )
     except ValueError:
         chart.data = sanitize_nan_infs(chart.data)
-        return chart.to_json(format=spec_format, validate=validate)
+        return chart.to_json(
+            format=spec_format,
+            validate=validate,
+            allow_nan=False,
+            default=str,
+        )

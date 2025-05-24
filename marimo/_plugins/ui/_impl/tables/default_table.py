@@ -7,7 +7,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from typing import Any, Optional, Union, cast
 
-from marimo._data.models import ColumnSummary, ExternalDataType
+from marimo._data.models import ColumnStats, ExternalDataType
 from marimo._dependencies.dependencies import DependencyManager
 from marimo._output.mime import MIME
 from marimo._plugins.core.json_encoder import WebComponentEncoder
@@ -292,16 +292,6 @@ class DefaultTableManager(TableManager[JsonTableData]):
         )
         top_k = sorted_grouped[:k]
 
-        chosen_column_name = None
-        for column_name in ["count", "number of rows", "count of rows"]:
-            if column_name not in column_names:
-                chosen_column_name = column_name
-                break
-        if chosen_column_name is None:
-            raise ValueError(
-                "Cannot specify a count column name, please rename your column"
-            )
-
         return [(value, count) for value, count in top_k]
 
     def get_field_type(
@@ -334,9 +324,9 @@ class DefaultTableManager(TableManager[JsonTableData]):
 
         raise ValueError("No supported table libraries found.")
 
-    def get_summary(self, column: str) -> ColumnSummary:
+    def get_stats(self, column: str) -> ColumnStats:
         del column
-        return ColumnSummary()
+        return ColumnStats()
 
     def get_num_rows(self, force: bool = True) -> int:
         del force

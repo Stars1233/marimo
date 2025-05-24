@@ -56,6 +56,9 @@ class PolarsTableManagerFactory(TableManagerFactory):
 
             @cached_property
             def schema(self) -> dict[str, pl.DataType]:
+                if isinstance(self._original_data, pl.LazyFrame):
+                    # Less expensive operation
+                    return self._original_data.collect_schema()
                 return self._original_data.schema
 
             def to_arrow_ipc(self) -> bytes:
@@ -117,7 +120,7 @@ class PolarsTableManagerFactory(TableManagerFactory):
                 except (
                     BaseException
                 ):  # Sometimes, polars throws a generic exception
-                    LOGGER.debug(
+                    LOGGER.info(
                         "Failed to write json. Trying to convert columns to strings."
                     )
                     for column in result.get_columns():
@@ -188,7 +191,7 @@ class PolarsTableManagerFactory(TableManagerFactory):
 
             @staticmethod
             def is_type(value: Any) -> bool:
-                return isinstance(value, pl.DataFrame)
+                return isinstance(value, (pl.DataFrame, pl.LazyFrame))
 
             def search(self, query: str) -> PolarsTableManager:
                 query = query.lower()

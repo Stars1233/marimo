@@ -18,7 +18,7 @@ from narwhals.typing import IntoDataFrame
 
 import marimo._output.data.data as mo_data
 from marimo import _loggers
-from marimo._data.models import NonNestedLiteral
+from marimo._data.models import ColumnStats
 from marimo._dependencies.dependencies import DependencyManager
 from marimo._output.mime import MIME
 from marimo._output.rich_help import mddoc
@@ -56,6 +56,7 @@ from marimo._runtime.context.types import (
     get_context,
 )
 from marimo._runtime.functions import EmptyArgs, Function
+from marimo._utils.hashable import is_hashable
 from marimo._utils.narwhals_utils import (
     can_narwhalify_lazyframe,
     unwrap_narwhals_dataframe,
@@ -75,23 +76,9 @@ class DownloadAsArgs:
 
 
 @dataclass
-class ColumnSummary:
-    column: str
-    nulls: Optional[int]
-    # int, float, datetime
-    min: Optional[NonNestedLiteral]
-    max: Optional[NonNestedLiteral]
-    # str
-    unique: Optional[int]
-    # bool
-    true: Optional[NonNestedLiteral] = None
-    false: Optional[NonNestedLiteral] = None
-
-
-@dataclass
 class ColumnSummaries:
     data: Union[JSONType, str]
-    summaries: list[ColumnSummary]
+    stats: dict[ColumnName, ColumnStats]
     # Disabled because of too many columns/rows
     # This will show a banner in the frontend
     is_disabled: Optional[bool] = None
@@ -111,7 +98,7 @@ class SearchTableArgs:
     sort: Optional[SortArgs] = None
     filters: Optional[list[Condition]] = None
     limit: Optional[int] = None
-    max_columns: Optional[int | MaxColumnsNotProvided] = (
+    max_columns: Optional[Union[int, MaxColumnsNotProvided]] = (
         MAX_COLUMNS_NOT_PROVIDED
     )
 
@@ -773,7 +760,7 @@ class table(
         if not self._show_column_summaries:
             return ColumnSummaries(
                 data=None,
-                summaries=[],
+                stats={},
                 # This is not 'disabled' because of too many rows
                 # so we don't want to display the banner
                 is_disabled=False,
@@ -786,33 +773,21 @@ class table(
         if total_rows > self._column_summary_row_limit:
             return ColumnSummaries(
                 data=None,
-                summaries=[],
+                stats={},
                 is_disabled=True,
             )
 
-        # Get column summaries if not chart-only mode
-        summaries: list[ColumnSummary] = []
+        # Get column stats if not chart-only mode
+        stats: dict[ColumnName, ColumnStats] = {}
         if self._show_column_summaries != "chart":
             for column in self._manager.get_column_names():
                 try:
-                    summary = self._searched_manager.get_summary(column)
-                    summaries.append(
-                        ColumnSummary(
-                            column=column,
-                            nulls=summary.nulls,
-                            min=summary.min,
-                            max=summary.max,
-                            unique=summary.unique,
-                            true=summary.true,
-                            false=summary.false,
-                        )
-                    )
+                    statistic = self._searched_manager.get_stats(column)
+                    stats[column] = statistic
                 except BaseException:
                     # Catch-all: some libraries like Polars have bugs and raise
                     # BaseExceptions, which shouldn't crash the kernel
-                    LOGGER.warning(
-                        "Failed to get summary for column %s", column
-                    )
+                    LOGGER.warning("Failed to get stats for column %s", column)
 
         # If we are above the limit to show charts,
         # or if we are in stats-only mode,
@@ -826,7 +801,7 @@ class table(
 
         return ColumnSummaries(
             data=chart_data,
-            summaries=summaries,
+            stats=stats,
             is_disabled=False,
         )
 
@@ -872,6 +847,15 @@ class table(
         )
 
     @functools.lru_cache(maxsize=1)  # noqa: B019
+    def _apply_filters_query_sort_cached(
+        self,
+        filters: Optional[list[Condition]],
+        query: Optional[str],
+        sort: Optional[SortArgs],
+    ) -> TableManager[Any]:
+        """Cached version that expects hashable arguments."""
+        return self._apply_filters_query_sort(filters, query, sort)
+
     def _apply_filters_query_sort(
         self,
         filters: Optional[list[Condition]],
@@ -934,7 +918,7 @@ class table(
             columns = self._searched_manager.get_column_names()
             response = self._get_row_ids(EmptyArgs())
 
-            row_ids: list[int] | range
+            row_ids: Union[list[int], range]
             if response.all_rows is True or response.error is not None:
                 # TODO: Handle sorted rows, they have reverse order of row_ids
                 row_ids = range(skip, skip + take)
@@ -1009,9 +993,14 @@ class table(
                 ),
             )
 
-        # Apply filters, query, and functools.sort using the cached method
-        result = self._apply_filters_query_sort(
-            tuple(args.filters) if args.filters else None,
+        # If the arguments are hashable, use the cached method
+        filter_function = (
+            self._apply_filters_query_sort_cached
+            if is_hashable(args.filters, args.query, args.sort)
+            else self._apply_filters_query_sort
+        )
+        result = filter_function(
+            tuple(args.filters) if args.filters else None,  # type: ignore
             args.query,
             args.sort,
         )

@@ -40,13 +40,13 @@ export const ContextAwarePanel: React.FC = () => {
 
   const renderModeToggle = () => {
     return (
-      <div className="flex flex-row items-center gap-2">
-        <Tooltip content={isPinned ? "Unpin" : "Pin"}>
+      <div className="flex flex-row items-center gap-3">
+        <Tooltip content={isPinned ? "Unpin panel" : "Pin panel"}>
           <Toggle
             size="xs"
             onPressedChange={() => setIsPinned(!isPinned)}
             pressed={isPinned}
-            aria-label={isPinned ? "Unpin" : "Pin"}
+            aria-label={isPinned ? "Unpin panel" : "Pin panel"}
           >
             {isPinned ? (
               <PinIcon className="w-4 h-4" />
@@ -55,7 +55,27 @@ export const ContextAwarePanel: React.FC = () => {
             )}
           </Toggle>
         </Tooltip>
-        <Tooltip content={isCellAware ? "Follow focused cell" : "Fixed"}>
+        <Tooltip
+          content={
+            isCellAware ? (
+              <div className="flex flex-col gap-1">
+                <span>Follow focused table</span>
+                <span className="text-xs text-muted-foreground w-64">
+                  The panel updates as cells that output tables are focused.
+                  Click to fix to the current cell.
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1">
+                <span>Focus on current table</span>
+                <span className="text-xs text-muted-foreground w-64">
+                  The panel is focused on the current table. Click to update
+                  based on which cell is focused.
+                </span>
+              </div>
+            )
+          }
+        >
           <Toggle
             size="xs"
             onPressedChange={() => setIsCellAware(!isCellAware)}

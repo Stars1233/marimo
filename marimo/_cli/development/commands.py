@@ -78,7 +78,7 @@ def _generate_server_api_schema() -> dict[str, Any]:
         # Data
         data.DataTableColumn,
         data.DataTable,
-        data.ColumnSummary,
+        data.ColumnStats,
         data.DataSourceConnection,
         data.Schema,
         data.Database,
@@ -200,6 +200,7 @@ def _generate_server_api_schema() -> dict[str, Any]:
         requests.PreviewSQLTableRequest,
         requests.RenameRequest,
         requests.SetCellConfigRequest,
+        requests.SetModelMessageRequest,
         requests.SetUserConfigRequest,
         requests.StopRequest,
     ]
